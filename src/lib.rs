@@ -65,7 +65,7 @@ fn extract_data_from_kml(kml: &Kml) -> Vec<Polygon> {
             }
         },
         _ => {
-            log!("unhandled kml enum: {:?}", kml);
+            //log!("unhandled kml enum: {:?}", kml);
         }
     }
     output
