@@ -21,7 +21,15 @@
 
   $effect(() => {
     if (!map) return;
-    // TODO: remove existing layers
+    // remove any existing polygon layers from map
+    const currentMapIds = map.getLayersOrder();
+    for (const layerId of currentMapIds) {
+      if (layerId.includes("polygon-")) {
+        map.removeLayer(layerId);
+        map.removeSource(layerId);
+      }
+    }
+    // add whatever polygons we got
     let i = 0;
     for (const polygon of polygons) {
       const baseId = `polygon-${i}`;
@@ -101,8 +109,8 @@
 
 <style>
   .map-wrap {
-    width: 400px;
-    height: 300px;
+    width: 75vw;
+    height: 400px;
     overflow: hidden;
     border: solid 2px rgba(50 50 50 / 0.25);
   }
