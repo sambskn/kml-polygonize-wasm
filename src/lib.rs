@@ -72,6 +72,8 @@ fn extract_data_from_kml(kml: &Kml) -> Vec<Polygon> {
 }
 
 fn extract_data_from_geometry(geom: &Geometry) -> Vec<Polygon> {
+    let mut polygons = vec![];
+    let mut polygon_points = vec![];
     match geom {
         Geometry::Polygon(polygon) => {
             // initialize polygon points vec
@@ -92,18 +94,75 @@ fn extract_data_from_geometry(geom: &Geometry) -> Vec<Polygon> {
                 }
                 points.push(point_ring_inner);
             }
-            vec![Polygon { points }]
+            polygons.push(Polygon { points });
         }
         Geometry::MultiGeometry(multi_geom) => {
-            let mut polygons = vec![];
+            // MultiGeometry handling strat: if it's polygon, it's polygon, & if it's a buncha linestrings, maybe also polygon?
+            // one temp array for building a polygon (e.g. from LineStrings)
+            let mut temp_polygon_points = vec![];
             for inner_geom in &multi_geom.geometries {
-                polygons.append(&mut extract_data_from_geometry(inner_geom));
+                match inner_geom {
+                    Geometry::LineString(linsestr) => {
+                        // add linestring points to temp_polygon_points
+                        // this is assuming this is an autocad like export where a polygon gets split into a million linestrings
+                        for coord in &linsestr.coords {
+                            temp_polygon_points.push(vec![coord.x, coord.y])
+                        }
+                    }
+                    Geometry::Polygon(_polygon) => {
+                        // use our main function to grab the polygon data
+                        polygons.append(&mut extract_data_from_geometry(inner_geom));
+                    }
+                    _ => {
+                        log!(
+                            "yo idk what we do with this inner geom in the multigeometry:  {:?}",
+                            inner_geom
+                        )
+                    }
+                }
             }
-            polygons
+            // check if we got a polygon from our temp points
+            let temp_point_count = temp_polygon_points.len();
+            if temp_point_count > 2 {
+                // check if last point == first point, as is custom in these parts
+                if (temp_polygon_points[temp_point_count - 1][0] != temp_polygon_points[0][0]
+                    && temp_polygon_points[temp_point_count - 1][1] != temp_polygon_points[0][1])
+                {
+                    // add in first point at the end if its not there
+                    temp_polygon_points
+                        .push(vec![temp_polygon_points[0][0], temp_polygon_points[0][1]]);
+                }
+                let new_polygon = Polygon {
+                    points: vec![temp_polygon_points],
+                };
+                polygons.push(new_polygon);
+            }
+        }
+        Geometry::LineString(linestr) => {
+            for coord in &linestr.coords {
+                polygon_points.push(vec![coord.x, coord.y])
+            }
         }
         _ => {
             log!("unhandled geometry type: {:?}", geom);
-            vec![]
         }
     }
+    // check if we need to build any top level polygons from line strings
+    // check if we got a polygon from our temp points
+    let temp_point_count = polygon_points.len();
+    if temp_point_count > 2 {
+        // check if last point == first point, as is custom in these parts
+        if (polygon_points[temp_point_count - 1][0] != polygon_points[0][0]
+            && polygon_points[temp_point_count - 1][1] != polygon_points[0][1])
+        {
+            // add in first point at the end if its not there
+            polygon_points.push(vec![polygon_points[0][0], polygon_points[0][1]]);
+        }
+        let new_polygon = Polygon {
+            points: vec![polygon_points],
+        };
+        polygons.push(new_polygon);
+    }
+    // return array of polys
+    polygons
 }
